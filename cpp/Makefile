@@ -1,4 +1,4 @@
-# Bracelet-Decoder makefile, for cross-platform compilation & linking
+# RingMark-Decoder algo app
 # (c) Shahar Gino, May-2020, sgino209@gmail.com
 
 AR		:=	ar
@@ -21,11 +21,7 @@ INC		:= 	-I/usr/local/lib \
 			-I./
 
 MODULES		:=	mainscan \
-			auxiliary \
-			decode_marks \
-			detect_marks \
-			possible_marks \
-			preprocess
+			auxiliary
 
 LIB_NAME	:=	ringmark_decoder.a
 

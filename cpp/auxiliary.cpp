@@ -1,122 +1,221 @@
-// Bracelet-Decoder algo app
-// (c) Shahar Gino, September-2017, sgino209@gmail.com
+// RingMark-Decoder algo app
+// (c) Shahar Gino, May-2020, sgino209@gmail.com
 
 #include "auxiliary.hpp"
-#include "preprocess.hpp"
 
-extern void preprocess(cv::Mat &imgOriginal, cv::Mat &imgGrayscale, cv::Mat &imgThresh, uint_xy_t PreprocessGaussKernel, 
-                       unsigned int PreprocessThreshBlockSize, unsigned int PreprocessThreshweight, uint_xy_t PreprocessMorphKernel);
-
-extern void set_xy(uint_xy_t *d, std::string str);
 extern void set_x4(uint_x4_t *d, std::string str);
-extern void set_x6(uint_x6_t *d, std::string str);
 
 std::string decode_frame(args_t args) {
 
   std::string code;
-  double rotation_angle;
-  mark_list_t possible_marks;
-  cv::Mat frame_orig, frame_gray, frame_thresh, imgCropped, imgResized, imgEnhanced;
-
+  cv::Mat frame_orig, img_gray, crop_img, crop_img_gray, crop_img_bw;
+  cv::Mat template_orig, template_gray, resized;
+  cv::Mat frame_thresh, imgCropped, imgResized;
+  cv::Point minLoc, maxLoc, matchLoc;
+  double minVal, maxVal, x, y, r;
+  int w, h, tw, th, res_cols, res_rows;
+  std::string mark_ext_val_list("deadbeef");
+  std::string mark_int_val_list("cafecafe");
+  std::string mark_ext_str, mark_int_str;
+  bool found=false;
+  char buffer[1000];
+  
   if (args.debugMode) {
     info("Starting C++ code");
   }
-  
+ 
+  // ---------------------------------------------------------------------------------
   // Load input image:
-  if (!args.ImageMat.empty()) {
-    frame_orig = args.ImageMat;
-  }
-  else {
-    frame_orig = cv::imread(args.ImageFile);
-  }
+  frame_orig = cv::imread(args.ImageFile);
+  
+  // ---------------------------------------------------------------------------------
+  // Load template image:
+  template_orig = cv::imread(args.TemplateFile);
 
+  // ---------------------------------------------------------------------------------
   // Resizing preparations:
   cv::Size s = frame_orig.size();
   cv::Size resizingVec;
-  if (args.PreprocessMode == "Legacy") {
-      resizingVec = resizingVec1;
-      if (s.width < s.height) {
-          resizingVec = resizingVec2;
-      }
-  }
-  else if (args.PreprocessMode == "BlurAndCanny") {
-      resizingVec = resizingVec3;
-  }
-  else {
-      error("Unsupported PreprocessMode mode: " + args.PreprocessMode);
+  resizingVec = resizingVec1;
+  if (s.width < s.height) {
+      resizingVec = resizingVec2;
   }
   
+  // ---------------------------------------------------------------------------------
   // Resizing and ROI cropping:
-  cv::Mat image;
-  if (args.PreprocessMode == "Legacy") {
-      cv::resize(frame_orig.clone(), imgResized, resizingVec);
-      imgCropped = crop_roi_from_image(imgResized, args.ROI);
-      image = imgCropped;
-  }
-  else if (args.PreprocessMode == "BlurAndCanny") {
-      imgCropped = crop_roi_from_image(frame_orig, args.ROI);
-      cv::resize(imgCropped.clone(), imgResized, resizingVec);
-      image = imgResized;
-  }
+  cv::resize(frame_orig.clone(), imgResized, resizingVec);
+  imgCropped = crop_roi_from_image(imgResized, args.ROI, true);
 
-  // Image enhancement:
-  if (args.imgEnhancementEn) {
-    imgEnhanced = imageEnhancement(image, 2, 8, 3, args.debugMode); //clahe_clipLimit=2, clahe_tileGridSize=8, gamme=3
-  }
-  else {
-    imgEnhanced = image.clone();
-  }
-  
-  // Pre-processing (CSC --> contrast --> blur --> threshold):
-  preprocess(imgEnhanced,
-             frame_gray,
-             frame_thresh,
-             args.PreprocessCvcSel,
-             args.PreprocessMode,
-             args.PreprocessGaussKernel,
-             args.PreprocessThreshBlockSize,
-             args.PreprocessThreshweight,
-             args.PreprocessMorphKernel,
-             args.PreprocessMedianBlurKernel,
-             args.PreprocessCannyThr);
+  // ---------------------------------------------------------------------------------
+  // Color space conversion:
+  cv::cvtColor(imgCropped, img_gray, cv::COLOR_BGR2GRAY);
+  cv::cvtColor(template_orig, template_gray, cv::COLOR_BGR2GRAY);
 
-  // Find bracelet marks:
-  rotation_angle = find_possible_marks(possible_marks,
-                                       frame_thresh,
-                                       args.MinPixelWidth,
-                                       args.MaxPixelWidth,
-                                       args.MinPixelHeight,
-                                       args.MaxPixelHeight,
-                                       args.MinAspectRatio,
-                                       args.MaxAspectRatio,
-                                       args.MinPixelArea,
-                                       args.MaxPixelArea,
-                                       args.MinExtent,
-                                       args.MaxExtent,
-                                       args.MaxDrift,
-                                       args.PerspectiveMode,
-                                       args.FindContoursMode,
-                                       args.HoughParams.x1,
-                                       args.HoughParams.x2,
-                                       args.HoughParams.x3,
-                                       args.HoughParams.x4,
-                                       args.HoughParams.x5,
-                                       args.HoughParams.x6,
-                                       args.debugMode);
+  // ---------------------------------------------------------------------------------
+  // Dimensions extraction:
+  w = imgCropped.size().width;
+  h = imgCropped.size().height;
+  tw = template_orig.size().width;
+  th = template_orig.size().height;
 
-  // Decode marks:
-  code = decode_marks(possible_marks,
-                      args.MarksRows,
-                      args.MarksCols,
-                      frame_thresh.size(),
-                      rotation_angle,
-                      args.debugMode);
+  // ---------------------------------------------------------------------------------
+  // Template Matching, multi-scale, end up with ROI extraction (cropped):
+  img_gray.copyTo(crop_img);
+
+  std::vector<double> scale_vec = linspace(args.TemplateMatchingMinScale, args.TemplateMatchingMaxScale, 20, true);
+  for (const auto& scale: scale_vec) {
+   
+    cv::resize(template_gray, resized, cv::Size(int(tw*scale), int(th*scale)));
     
-  if (args.debugMode) {
+    r = scale;
 
-    cv::imwrite("frame_orig.jpg", draw_roi(frame_orig, args.ROI));
-    cv::imwrite("frame_gray.jpg", frame_gray);
-    cv::imwrite("frame_thresh.jpg", frame_thresh);
+    /// Create the result matrix
+    cv::Mat res;
+    res_cols =  img_gray.cols - resized.cols + 1;
+    res_rows = img_gray.rows - resized.rows + 1;
+    res.create(res_rows, res_cols, CV_32FC1);
+    
+    // Apply Template Matching
+    int match_method = cv::TM_CCOEFF_NORMED; 
+    cv::matchTemplate(img_gray, resized, res, match_method);
+
+    // Localizing the best match with minMaxLoc
+    cv::minMaxLoc(res, &minVal, &maxVal, &minLoc, &maxLoc, cv::Mat());
+    matchLoc = (match_method  == cv::TM_SQDIFF || match_method == cv::TM_SQDIFF_NORMED) ? minLoc : maxLoc;
+
+    if (maxVal > args.TemplateMatchingThr) {
+ 
+        x = matchLoc.x + std::ceil(args.TemplateToMarkXScale*tw*scale);
+        y = matchLoc.y + std::ceil(args.TemplateToMarkYScale*th*scale);
+        r = std::ceil(tw*scale/2);
+
+        uint_x4_t template_roi;
+        template_roi.x1 = x - std::ceil(args.CropMarginR*r) - args.CropMarginX;
+        template_roi.x2 = y - std::ceil(args.CropMarginR*r) - args.CropMarginY;
+        template_roi.x3 = 2*std::ceil(args.CropMarginR*r);
+        template_roi.x4 = 2*std::ceil(args.CropMarginR*r);
+        template_roi.len = 4;
+        crop_img_gray = crop_roi_from_image(img_gray, template_roi, false);
+   
+        cv::threshold(crop_img_gray, crop_img_bw, 127, 255, cv::THRESH_BINARY_INV);
+
+        found = true;
+        break;
+    }
+  }
+
+  if (found) {
+      
+    // ---------------------------------------------------------------------------------
+    // Ring Marks extraction:
+    int roi_x = std::ceil(crop_img_bw.size().width/2);
+    int roi_y = std::ceil(crop_img_bw.size().height/2);
+    int roi_r1 = std::ceil(args.RoiR1Scale * r);
+    int roi_r2 = std::ceil(args.RoiR2Scale * r);
+  
+    std::list<uint_x4_t> mark_ext_list, mark_int_list;
+
+    std::vector<double> teta_vec_ext = linspace(0, 2*M_PI, args.MarksNumExternal+1, false);
+    for (const auto& teta: teta_vec_ext) {
+      uint_x4_t el;
+      el.x1 = std::ceil(roi_x + roi_r1 * std::cos(teta));
+      el.x2 = std::ceil(roi_y + roi_r1 * std::sin(teta));
+      el.x3 = std::ceil(roi_x + roi_r1 * std::cos(teta)*1.15);
+      el.x4 = std::ceil(roi_y + roi_r1 * std::sin(teta)*1.15);
+      el.len = 4;
+      mark_ext_list.push_back(el);
+    }
+    mark_ext_list.pop_back();
+    
+    std::vector<double> teta_vec_int = linspace(0, 2*M_PI, args.MarksNumInternal+1, false);
+    for (const auto& teta: teta_vec_int) {
+      uint_x4_t el;
+      el.x1 = std::ceil(roi_x + roi_r2 * std::cos(teta));
+      el.x2 = std::ceil(roi_y + roi_r2 * std::sin(teta));
+      el.x3 = std::ceil(roi_x + roi_r2 * std::cos(teta)*0.85);
+      el.x4 = std::ceil(roi_y + roi_r2 * std::sin(teta)*0.85);
+      el.len = 4;
+      mark_int_list.push_back(el);
+    }
+    mark_int_list.pop_back();
+
+    // ---------------------------------------------------------------------------------
+    // Ring code decoding:
+    std::list<int> mark_ext_val_list;
+    for (auto const& mark: mark_ext_list) {
+      uint_x4_t mask_roi;
+      mask_roi.x1 = mark.x1;
+      mask_roi.x2 = mark.x2;
+      mask_roi.x3 = 4;
+      mask_roi.x4 = 4;
+      mask_roi.len = 4;
+      cv::Mat mask_roi_cropped = crop_roi_from_image(crop_img_bw, mask_roi, false);
+      double mark_mean = double(cv::mean(mask_roi_cropped).val[0]);
+      mark_ext_val_list.push_back(int(mark_mean) < args.MarkDecodeThr);
+    }
+    
+    std::list<int> mark_int_val_list;
+    for (auto const& mark: mark_int_list) {
+      uint_x4_t mask_roi;
+      mask_roi.x1 = mark.x1;
+      mask_roi.x2 = mark.x2;
+      mask_roi.x3 = 4;
+      mask_roi.x4 = 4;
+      mask_roi.len = 4;
+      cv::Mat mask_roi_cropped = crop_roi_from_image(crop_img_bw, mask_roi, false);
+      double mark_mean = double(cv::mean(mask_roi_cropped).val[0]);
+      mark_int_val_list.push_back(int(mark_mean) < args.MarkDecodeThr);
+    }
+        
+    for (auto const& k: mark_ext_val_list) {
+        mark_ext_str += std::to_string(k);
+    }
+    
+    for (auto const& k: mark_int_val_list) {
+        mark_int_str += std::to_string(k);
+    }
+  
+    std::string code_str = mark_ext_str + mark_int_str;
+  
+    code = "0x" + bin2hex(code_str);
+  
+    // ---------------------------------------------------------------------------------
+    // Debug
+    if (args.debugMode) {
+    
+        sprintf(buffer, "External Ring: %s", mark_ext_str.c_str());
+        debug(buffer);
+        sprintf(buffer, "Internal Ring: %s", mark_int_str.c_str());
+        debug(buffer);
+        sprintf(buffer, "Merged Code (Int+Ext): %s", code_str.c_str());
+        debug(buffer);
+        
+        cv::Mat tm_result;
+        imgCropped.copyTo(tm_result);
+        cv::rectangle(tm_result, matchLoc, cv::Point(matchLoc.x + resized.cols , matchLoc.y + resized.rows), cv::Scalar(0,255,0), 2, 8, 0);
+        cv::rectangle(tm_result, cv::Point(x-5, y-5), cv::Point(x+5, y+5), cv::Scalar(0,128,255), -1);
+        cv::circle(tm_result, cv::Point(x, y), r, cv::Scalar(255, 255, 0), 4);
+        cv::imwrite("tm_result.jpg", tm_result);
+        
+        cv::Mat cropped_bw_result;
+        crop_img_bw.copyTo(cropped_bw_result);
+        cv::rectangle(cropped_bw_result, cv::Point(roi_x-2, roi_y-2), cv::Point(roi_x+2, roi_y+2), 128, -1);
+        cv::circle(cropped_bw_result, cv::Point(roi_x, roi_y), roi_r1, 128, 1);
+        cv::circle(cropped_bw_result, cv::Point(roi_x, roi_y), roi_r2, 128, 1);
+        int k=0;
+        for (auto const& mark: mark_ext_list) {
+          cv::rectangle(cropped_bw_result, cv::Rect(mark.x1, mark.x2, 4, 4), 128, -1);
+          cv::putText(cropped_bw_result, std::to_string(k), cv::Point(mark.x3-4, mark.x4+2), cv::FONT_HERSHEY_SIMPLEX, 0.2, 128, 1);
+          k++;
+        }
+        k=0;
+        for (auto const& mark: mark_int_list) {
+          cv::rectangle(cropped_bw_result, cv::Rect(mark.x1, mark.x2, 4, 4), 128, -1);
+          cv::putText(cropped_bw_result, std::to_string(k), cv::Point(mark.x3-4, mark.x4+2), cv::FONT_HERSHEY_SIMPLEX, 0.2, 128, 1);
+          k++;
+        }
+        cv::imwrite("tm_cropped_bw.jpg", cropped_bw_result);
+    }
   }
 
   return code.c_str();
@@ -161,7 +260,7 @@ cv::Mat draw_roi(cv::Mat &frame, uint_x4_t roi) {
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
-cv::Mat crop_roi_from_image(cv::Mat &frame, uint_x4_t roi) {
+cv::Mat crop_roi_from_image(cv::Mat &frame, uint_x4_t roi, bool verbose) {
     
     cv::Mat imgCropped;
     
@@ -185,9 +284,11 @@ cv::Mat crop_roi_from_image(cv::Mat &frame, uint_x4_t roi) {
                         cv::Point2f((float)roiCx, (float)roiCy),
                         imgCropped);
 
-      char buffer[1000];
-      sprintf(buffer, "ROI size: (Cx,Cy)=(%.2f,%.2f), WxH=%dx%d", roiCx, roiCy, roiW, roiH);
-      info(buffer);
+      if (verbose) {
+        char buffer[1000];
+        sprintf(buffer, "ROI size: (Cx,Cy)=(%.2f,%.2f), WxH=%dx%d", roiCx, roiCy, roiW, roiH);
+        info(buffer);
+      }
     }
      
     return imgCropped;
@@ -205,33 +306,22 @@ args_t load_default_args() {
 
   args_t args;
 
-  args.ImageFile = "/Users/shahargino/Documents/ImageProcessing/Bracelet_decoder/Database/180717/24.jpg";
-  args.PreprocessCvcSel = "V";
-  args.PreprocessMode = "Legacy";
-  set_xy(&args.PreprocessGaussKernel, "(5,5)");
-  args.PreprocessThreshBlockSize = 19;
-  args.PreprocessThreshweight = 7;
-  set_xy(&args.PreprocessMorphKernel, "(3,3)");
-  args.PreprocessMedianBlurKernel = 13;
-  args.PreprocessCannyThr = 80;
-  args.imgEnhancementEn = false;
-  args.MinPixelWidth = 7;
-  args.MaxPixelWidth = 30;
-  args.MinPixelHeight = 7;
-  args.MaxPixelHeight = 30;
-  args.MinAspectRatio = 0.6;
-  args.MaxAspectRatio = 2.5;
-  args.MinPixelArea = 150;
-  args.MaxPixelArea = 600;
-  args.MinExtent = 0.4;
-  args.MaxExtent = 0.9;
-  args.MaxDrift = 2.5;
-  args.MarksRows = 3;
-  args.MarksCols = 10;
-  set_x4(&args.ROI, "(0,0)"); // if set_x4 is not recognized, simply replace with args.ROI.x1=0 args.ROI.x2=0;
-  args.FindContoursMode = "Legacy";
-  set_x6(&args.HoughParams, "(-1,-1,-1,-1,-1,-1)");
-  args.PerspectiveMode = 0;
+  args.ImageFile = "../data/image0.jpg";
+  args.TemplateFile = "../data/template_m.png";
+  args.MarksNumExternal = 40;
+  args.MarksNumInternal = 34;
+  args.TemplateMatchingThr = 0.83;
+  args.TemplateMatchingMinScale = 0.4;
+  args.TemplateMatchingMaxScale = 1.2;
+  args.TemplateToMarkXScale = 1.69;
+  args.TemplateToMarkYScale = 0.50;
+  args.CropMarginR = 1.2;
+  args.CropMarginX = 2;
+  args.CropMarginY = 0;
+  args.RoiR1Scale = 0.88;
+  args.RoiR2Scale = 0.75;
+  args.MarkDecodeThr = 128;
+  set_x4(&args.ROI, "(0,0)");
   args.debugMode = false;
 
   return args;
@@ -241,32 +331,78 @@ args_t load_default_args() {
 void print_args(args_t args) {
 
   printf("args.ImageFile = %s\n", args.ImageFile.c_str());
-  printf("args.PreprocessCvcSel = %s\n", args.PreprocessCvcSel.c_str());
-  printf("args.PreprocessMode = %s\n", args.PreprocessMode.c_str());
-  printf("args.PreprocessGaussKernel = (%d,%d)\n", args.PreprocessGaussKernel.x, args.PreprocessGaussKernel.y);
-  printf("args.PreprocessThreshBlockSize = %d\n", args.PreprocessThreshBlockSize);
-  printf("args.PreprocessThreshweight = %d\n", args.PreprocessThreshweight);
-  printf("args.PreprocessMorphKernel = (%d,%d)\n", args.PreprocessMorphKernel.x, args.PreprocessMorphKernel.y);
-  printf("args.PreprocessMedianBlurKernel = %d\n", args.PreprocessMedianBlurKernel);
-  printf("args.PreprocessCannyThr = %d\n", args.PreprocessCannyThr);
-  printf("args.imgEnhancementEn = %d\n", args.imgEnhancementEn);
-  printf("args.MinPixelWidth = %d\n", args.MinPixelWidth);
-  printf("args.MaxPixelWidth = %d\n", args.MaxPixelWidth);
-  printf("args.MinPixelHeight = %d\n", args.MinPixelHeight);
-  printf("args.MaxPixelHeight = %d\n", args.MaxPixelHeight);
-  printf("args.MinAspectRatio = %.1f\n", args.MinAspectRatio);
-  printf("args.MaxAspectRatio = %.1f\n", args.MaxAspectRatio);
-  printf("args.MinPixelArea = %d\n", args.MinPixelArea);
-  printf("args.MaxPixelArea = %d\n", args.MaxPixelArea);
-  printf("args.MinExtent = %.1f\n", args.MinExtent);
-  printf("args.MaxExtent = %.1f\n", args.MaxExtent);
-  printf("args.MaxDrift = %.1f\n", args.MaxDrift);
-  printf("args.MarksRows = %d\n", args.MarksRows);
-  printf("args.MarksCols = %d\n", args.MarksCols);
+  printf("args.TemplateFile = %s\n", args.TemplateFile.c_str());
+  printf("args.MarksNumExternal = %d\n", args.MarksNumExternal);
+  printf("args.MarksNumInternal = %d\n", args.MarksNumInternal);
+  printf("args.TemplateMatchingThr = %.2f\n", args.TemplateMatchingThr);
+  printf("args.TemplateMatchingMinScale = %.2f\n", args.TemplateMatchingMinScale);
+  printf("args.TemplateMatchingMaxScale = %.2f\n", args.TemplateMatchingMaxScale);
+  printf("args.TemplateToMarkXScale = %.2f\n", args.TemplateToMarkXScale);
+  printf("args.TemplateToMarkYScale = %.2f\n", args.TemplateToMarkYScale);
+  printf("args.CropMarginR = %.2f\n", args.CropMarginR);
+  printf("args.CropMarginX = %d\n", args.CropMarginX);
+  printf("args.CropMarginY = %d\n", args.CropMarginY);
+  printf("args.RoiR1Scale = %.2f\n", args.RoiR1Scale);
+  printf("args.RoiR2Scale = %.2f\n", args.RoiR2Scale);
+  printf("args.MarkDecodeThr = %d\n", args.MarkDecodeThr);
   printf("args.ROI = (%d,%d,%d,%d,%d)\n", args.ROI.x1, args.ROI.x2, args.ROI.x3, args.ROI.x4, args.ROI.len);
-  printf("args.FindContoursMode = %s\n", args.FindContoursMode.c_str());
-  printf("args.HoughParams = (%d,%d,%d,%d,%d,%d)\n", args.HoughParams.x1, args.HoughParams.x2, args.HoughParams.x3, args.HoughParams.x4, args.HoughParams.x5, args.HoughParams.x6 );
-  printf("args.PerspectiveMode = %d\n", args.PerspectiveMode);
   printf("args.debugMode = %d\n", args.debugMode);
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------
+
+std::vector<double> linspace(double start_in, double end_in, int num_in, bool flip) {
+
+  std::vector<double> linspaced;
+
+  double start = static_cast<double>(start_in);
+  double end = static_cast<double>(end_in);
+  double num = static_cast<double>(num_in);
+
+  if (num == 0) { return linspaced; }
+  if (num == 1) {
+    linspaced.push_back(start);
+    return linspaced;
+  }
+
+  double delta = (end - start) / (num - 1);
+
+  for (int i=0; i < num-1; ++i) {
+    linspaced.push_back(start + delta * i);
+  }
+  linspaced.push_back(end);
+
+  if (flip) {
+      std::reverse(linspaced.begin(), linspaced.end());
+  }
+  
+  return linspaced;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+
+std::string bin2hex(std::string binstr) {
+    
+  std::string hexstr;
+
+  for (uint i = 0; i < binstr.size(); i += 4) {
+    
+    int8_t n = 0;
+    for (uint j = i; j < i + 4; ++j) {
+      n <<= 1;
+      if (binstr[j] == '1') {
+        n |= 1;
+      }
+    }
+
+    if (n<=9) {
+      hexstr.push_back('0' + n);
+    }
+    else {
+      hexstr.push_back('A' + n - 10);
+    }
+  }
+
+  return hexstr;
+}

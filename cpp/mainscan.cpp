@@ -1,9 +1,9 @@
-// Bracelet-Decoder algo app
-// (c) Shahar Gino, September-2017, sgino209@gmail.com
+// RingMark-Decoder algo app
+// (c) Shahar Gino, May-2020, sgino209@gmail.com
 
 #include "mainscan.hpp"
 
-const char* bracelet_decoder_version = "1.3";
+const char* ringmark_decoder_version = "1.0";
 
 int main(int argc, char** argv) {
   
@@ -25,38 +25,27 @@ int main(int argc, char** argv) {
     iarg = getopt_long(argc, argv, "hvi:", longopts, &index);
     
     switch (iarg) {
-      case 'h':                            usage(argv[0]);  exit(0);                                       break;
-      case 'v':                            sprintf(buffer, "Bracelet_Decoder version: %s", bracelet_decoder_version );
-                                           info(buffer); 
-                                           exit(0);                                                        break;
-      case 'i':                            if (optarg) { args.ImageFile = optarg;                       }  break;
-      case ARG_PREPROCESSCVCSEL:           if (optarg) { args.PreprocessCvcSel = optarg;                }  break;
-      case ARG_PREPROCESSMODE:             if (optarg) { args.PreprocessMode = optarg;                  }  break;
-      case ARG_PREPROCESSGAUSSKERNEL:      if (optarg) { set_xy(&args.PreprocessGaussKernel, optarg);   }  break;
-      case ARG_PREPROCESSTHRESHBLOCKSIZE:  if (optarg) { args.PreprocessThreshBlockSize = atoi(optarg); }  break;
-      case ARG_PREPROCESSTHRESHWEIGHT:     if (optarg) { args.PreprocessThreshweight = atoi(optarg);    }  break;
-      case ARG_PREPROCESSMORPHKERNEL:      if (optarg) { set_xy(&args.PreprocessMorphKernel, optarg);   }  break;
-      case ARG_PREPROCESSMEDIANBLURKERNEL: if (optarg) { args.PreprocessMedianBlurKernel = atoi(optarg);}  break;
-      case ARG_PREPROCESSCANNYTHR:         if (optarg) { args.PreprocessCannyThr = atoi(optarg);        }  break;
-      case ARG_IMGENHANCEMENTEN:           args.imgEnhancementEn = true;                                   break;
-      case ARG_MINPIXELWIDTH:              if (optarg) { args.MinPixelWidth = atoi(optarg);             }  break;
-      case ARG_MAXPIXELWIDTH:              if (optarg) { args.MaxPixelWidth = atoi(optarg);             }  break;
-      case ARG_MINPIXELHEIGHT:             if (optarg) { args.MinPixelHeight = atoi(optarg);            }  break;
-      case ARG_MAXPIXELHEIGHT:             if (optarg) { args.MaxPixelHeight = atoi(optarg);            }  break;
-      case ARG_MINASPECTRATIO:             if (optarg) { args.MinAspectRatio = atof(optarg);            }  break;
-      case ARG_MAXASPECTRATIO:             if (optarg) { args.MaxAspectRatio = atof(optarg);            }  break;
-      case ARG_MINPIXELAREA:               if (optarg) { args.MinPixelArea = atoi(optarg);              }  break;
-      case ARG_MAXPIXELAREA:               if (optarg) { args.MaxPixelArea = atoi(optarg);              }  break;
-      case ARG_MINEXTENT:                  if (optarg) { args.MinExtent = atof(optarg);                 }  break;
-      case ARG_MAXEXTENT:                  if (optarg) { args.MaxExtent = atof(optarg);                 }  break;
-      case ARG_MAXDRIFT:                   if (optarg) { args.MaxDrift = atof(optarg);                  }  break;
-      case ARG_MARKROWS:                   if (optarg) { args.MarksRows = atoi(optarg);                 }  break;
-      case ARG_MARKCOLS:                   if (optarg) { args.MarksCols = atoi(optarg);                 }  break;
-      case ARG_ROI:                        if (optarg) { set_x4(&args.ROI, optarg);                     }  break;
-      case ARG_FINDCONTOURSMODE:           if (optarg) { args.FindContoursMode = optarg;                }  break;
-      case ARG_HOUGHPARAMS:                if (optarg) { set_x6(&args.HoughParams, optarg);             }  break;
-      case ARG_PERSPECTIVEMODE:            if (optarg) { args.PerspectiveMode = atoi(optarg);           }  break;
-      case ARG_DEBUG:                      args.debugMode = true;                                          break;
+      case 'h':                              usage(argv[0]);  exit(0);                                       break;
+      case 'v':                              sprintf(buffer, "RingMark_Decoder version: %s", ringmark_decoder_version );
+                                             info(buffer); 
+                                             exit(0);                                                        break;
+      case 'i':                              if (optarg) { args.ImageFile = optarg;                       }  break;
+      case ARG_TEMPLATE_FILE:                if (optarg) { args.TemplateFile = optarg;                    }  break;
+      case ARG_MARKS_NUM_EXTERNAL:           if (optarg) { args.MarksNumExternal = atoi(optarg);          }  break;
+      case ARG_MARKS_NUM_INTERNAL:           if (optarg) { args.MarksNumInternal = atoi(optarg);          }  break;
+      case ARG_TEMPLATE_MATCHING_THR:        if (optarg) { args.TemplateMatchingThr = atof(optarg);       }  break;
+      case ARG_TEMPLATE_MATCHING_MIN_SCALE:  if (optarg) { args.TemplateMatchingMinScale = atof(optarg);  }  break;
+      case ARG_TEMPLATE_MATCHING_MAX_SCALE:  if (optarg) { args.TemplateMatchingMaxScale = atof(optarg);  }  break;
+      case ARG_TEMPLATE_TO_MARK_X_SCALE:     if (optarg) { args.TemplateToMarkXScale = atof(optarg);      }  break;
+      case ARG_TEMPLATE_TO_MARK_Y_SCALE:     if (optarg) { args.TemplateToMarkYScale = atof(optarg);      }  break;
+      case ARG_CROP_MARGIN_R:                if (optarg) { args.CropMarginR = atof(optarg);               }  break;
+      case ARG_CROP_MARGIN_X:                if (optarg) { args.CropMarginX = atoi(optarg);               }  break;
+      case ARG_CROP_MARGIN_Y:                if (optarg) { args.CropMarginY = atoi(optarg);               }  break;
+      case ARG_ROI_R1_SCALE:                 if (optarg) { args.RoiR1Scale = atof(optarg);                }  break;
+      case ARG_ROI_R2_SCALE:                 if (optarg) { args.RoiR2Scale = atof(optarg);                }  break;
+      case ARG_MARK_DECODE_THR:              if (optarg) { args.MarkDecodeThr = atoi(optarg);             }  break;
+      case ARG_ROI:                          if (optarg) { set_x4(&args.ROI, optarg);                     }  break;
+      case ARG_DEBUG:                        args.debugMode = true;                                          break;
     }
   }
   
@@ -114,7 +103,7 @@ std::string get_envpath(std::string ImageFile) {
             img_str.replace(found2,1,"_");
         }
     }
-    std::string envpath = "bracelet_decoder_results_" + timestr + "_" + img_str;
+    std::string envpath = "ringmark_decoder_results_" + timestr + "_" + img_str;
 
     return envpath;
 }
@@ -122,32 +111,25 @@ std::string get_envpath(std::string ImageFile) {
 // ------------------------------------------------------------------------------------------------------------------------------
 void usage(char *script_name) {
   
-  std::cout << std::endl;
-  std::cout << script_name << "-i [image_file]" << std::endl;
-  std::cout << std::endl;
-  std::cout << "Optional preprocssing flags:                  --PreprocessCvcSel --PreprocessMode --PreprocessGaussKernel --PreprocessThreshBlockSize" << std::endl;
-  std::cout << "Optional preprocssing flags (cont.):          --PreprocessThreshweight --PreprocessMorphKernel --PreprocessMedianBlurKernel" << std::endl;
-  std::cout << "Optional preprocssing flags (cont.):          --PreprocessCannyThr --imgEnhancementEn" << std::endl;
-  std::cout << "Optional marks-detection flags:               --MinPixelWidth --MaxPixelWidth --MinPixelHeight --MaxPixelHeight --MinAspectRatio --MaxAspectRatio" << std::endl;
-  std::cout << "Optional marks-detection flags (cont.):       --MinPixelArea --MaxPixelArea --MaxDrift --MarksRows --MarksCols --ROI" << std::endl;
-  std::cout << "Optional marks-detection flags (cont.):       --FindContoursMode --HoughParams --PerspectiveMode" << std::endl;
-  std::cout << "Optional misc. flags:                         --debug --version" << std::endl;
-  std::cout << std::endl;
-  std::cout << "Note about HoughParams settings (relevant only when FindContoursMode=\"Hough\"):" << std::endl;
-  std::cout << "   HoughParams = (dp, minDist, param1, param2, minRadius, maxRadius)" << std::endl;
-  std::cout << "   (-) dp ---------> Large dp values -->  smaller accumulator array" << std::endl;
-  std::cout << "   (-) minDist ----> Min distance between the detected circles centers" << std::endl;
-  std::cout << "   (-) param1 -----> Gradient value used to handle edge detection" << std::endl;
-  std::cout << "   (-) param2 -----> Accumulator thresh val (smaller = more circles)" << std::endl;
-  std::cout << "   (-) minRadius --> Minimum size of the radius (in pixels)" << std::endl;
-  std::cout << "   (-) maxRadius --> Maximum size of the radius (in pixels)" << std::endl;
-  std::cout << std::endl;
-  std::cout << "Note about ROI settings:" << std::endl;
-  std::cout << "   (-) Option 1:  ROI = (startX, startY, width, height)" << std::endl;
-  std::cout << "   (-) Option 2:  ROI = (startX, startY, R)  --->  width=height=R" << std::endl;
-  std::cout << "   (-) Option 3:  ROI = (0,0) --->  ROI equals to whole input image" << std::endl;
-  std::cout << std::endl;
-  std::cout << "Note that input image is automatically being resized for 1600x1200, so ROI shall be set accordingly" << std::endl;
-  std::cout << std::endl;
+  std::cout << ""                                                                                                                       << std::endl;
+  std::cout << script_name << "-i [image_file]"                                                                                         << std::endl;
+  std::cout << ""                                                                                                                       << std::endl;
+  std::cout << "Marks Number (external/internal rings):    --MarksNumExternal --MarksNumInternal"                                       << std::endl;
+  std::cout << "Template File path:                        --TemplateFile"                                                              << std::endl;
+  std::cout << "Template Matching (thr/min/max):           --TemplateMatchingThr --TemplateMatchingMinScale --TemplateMatchingMaxScale" << std::endl;
+  std::cout << "Template to RingMark distance (x/y):       --TemplateToMarkXScale --TemplateToMarkYScale"                               << std::endl;
+  std::cout << "Crop RingMark Margins (x/y/R):             --CropMarginR --CropMarginX --CropMarginY"                                   << std::endl;
+  std::cout << "RinkMark Scale (external/internal rings):  --RoiR1Scale --RoiR2Scale"                                                   << std::endl;
+  std::cout << "RinkMark decode threshold:                 --MarkDecodeThr"                                                             << std::endl;
+  std::cout << "Region Of Interest (ROI) selection:        --ROI"                                                                       << std::endl;
+  std::cout << "Optional misc. flags:                      --debug --version"                                                           << std::endl;
+  std::cout << ""                                                                                                                       << std::endl;
+  std::cout << "ROI settings:"                                                                                                          << std::endl;
+  std::cout << "   (-) Option 1:  ROI = (startX, startY, width, height)"                                                                << std::endl;
+  std::cout << "   (-) Option 2:  ROI = (startX, startY, R)  --->  width=height=R"                                                      << std::endl;
+  std::cout << "   (-) Option 3:  ROI = (0,0) --->  ROI equals to whole input image"                                                    << std::endl;
+  std::cout << ""                                                                                                                       << std::endl;
+  std::cout << "Note: input image is automatically being resized for 1600x1200, so ROI shall be set accordingly"                        << std::endl;
+  std::cout << ""                                                                                                                       << std::endl;
 }
 

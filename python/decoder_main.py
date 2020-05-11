@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# RingMark-Decoder algo app
+# (c) Shahar Gino, May-2020, sgino209@gmail.com
+
 # # Ring Mark Decoder
 
 # ## Code Definition
@@ -75,7 +78,7 @@ for scale in np.linspace(template_matching_min_scale, template_matching_max_scal
         y = pt[1] + int(np.ceil(template_to_mark_y_scale*th*scale))
         r = int(np.ceil(tw*scale/2))
         
-        crop_img_gray = img_gray[y-int(np.ceil(crop_margin_r*r))-crop_margin_y:y+int(np.ceil(crop_margin_r*r)-crop_margin_y),
+        crop_img_gray = img_gray[y-int(np.ceil(crop_margin_r*r))-crop_margin_y:y+int(np.ceil(crop_margin_r*r))-crop_margin_y,
                                  x-int(np.ceil(crop_margin_r*r))-crop_margin_x:x+int(np.ceil(crop_margin_r*r))-crop_margin_x]
         
         _, crop_img_bw = cv2.threshold(crop_img_gray, 127, 255, cv2.THRESH_BINARY_INV)
