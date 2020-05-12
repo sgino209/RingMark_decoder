@@ -307,7 +307,7 @@ args_t load_default_args() {
   args_t args;
 
   args.ImageFile = "../data/image0.jpg";
-  args.TemplateFile = "../data/template_m.png";
+  args.TemplateFile = "../templates/template_m.png";
   args.MarksNumExternal = 40;
   args.MarksNumInternal = 34;
   args.TemplateMatchingThr = 0.83;

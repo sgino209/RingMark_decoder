@@ -48,7 +48,7 @@ debug_en = True
 
 # Load image + Template:
 img = cv2.imread('../data/image0.jpg')
-template = cv2.imread('../data/template_m.png')
+template = cv2.imread('../templates/template_m.png')
 
 # Color space conversions:
 template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
@@ -119,9 +119,17 @@ for k,mark in enumerate(mark_int_list[:-1]):
     mark_mean = cv2.mean(mark_roi)[0]
     mark_int_val_list.append(int(mark_mean < mark_decode_thr))
 
+code_str = ""
+for k in mark_ext_val_list + mark_int_val_list:
+    code_str += str(k)
+    
+code = hex(int(code_str, 2)).upper()
+
 print("External Ring:\n%s\n" % str(mark_ext_val_list))
 print("Internal Ring:\n%s\n" % str(mark_int_val_list))
-    
+print("Merged Code (Int+Ext):\n%s\n" % code_str)
+print("Code = %s\n" % code)
+
 # Debug:
 if debug_en:
 
