@@ -130,4 +130,5 @@ dmypy.json
 
 .DS_Store
 releases/
+misc/
 cpp/ringmark_decoder_results*
